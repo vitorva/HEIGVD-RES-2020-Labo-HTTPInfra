@@ -1,1 +1,0 @@
-# HEIGVD-RES-2020-Labo-HTTPInfra
