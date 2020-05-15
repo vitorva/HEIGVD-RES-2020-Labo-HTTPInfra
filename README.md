@@ -26,10 +26,14 @@ COPY src/ /var/www/html/
 
 La première instruction permet d'alléger la configuration de l'image en récupérant une déja préconfigurée (ici une image php avec un serveur HTTP apache configuré)
 
-La deuxième, copie notre dossier src local dans le dossier var/www/html de l'image (Où le contenu de la page web sera chargé).
+La deuxième, copie notre dossier src local dans le dossier var/www/html de l'image (Cet emplacement peut-être modifié aux travers de son fichier de configuration)
+ 
+Il y a donc 2 endroits principaux dans le serveur apache :
 
-Ce chemin est défini dans le service de configuration apache dans le fichier /etc/apache/site-available
-et peut donc être modifié
+/var/ : Contenu de la page web
+
+/etc/apache2/ : Contient les différents fichiers de configurations
+
 
 ### Ajouter du contenu HTML basique
 
@@ -136,6 +140,101 @@ Ne pas oublier le retour à la ligne !
 navigateur :  
 http://localhost:3000/
 
+## Étape 3 (fb-apache-reverse-proxy)
+
+#### Configurer un reverse proxy apache dans docker
+
+Dockerfile :
+````
+FROM php:7.2-apache
+
+COPY conf/ /etc/apache2
+
+RUN a2enmod proxy proxy_http
+RUN a2ensite 000-* 001-*
+````
+
+La commande copy n'écrase pas le contenu de Apache2  mais complète par nos fichiers.
+
+a2enmod  : Permet d'activer des modules supplémentaires d'apache (ex mode proxy)
+
+a2ensite : permet d'activer les virtual hosts configurés dans le dossier sites-available (Cela permet au serveur apache de servir plusieurs sites logiques)
+
+Dossier conf : Contient le répertoire "sites-available" qui lui contient les fichiers de configuration des sites
+
+
+sites-available :
+* 000-default.conf
+
+````
+<VirtualHost *:80>
+</VirtualHost>
+````
+Nécessaire au bon fonctionnement du reverse proxy. Sinon le virtual host du fichier 001-reverse-proxy.conf serait celui par défaut et
+on pourrait aux accéder aux ressources de ce virtual host sans avoir à préciser le ServerName.
+
+* 001-reverse-proxy.conf
+````
+<VirtualHost *:80>
+	ServerName demo.res.ch
+	
+	#ErrorLog $[APACHE_LOG_DIR]/error.log
+	#CustomLog $[APACHE_LOG_DIR]/access.log combined
+	
+	ProxyPass "/api/students/" "http://172.17.0.3:3000/"
+	ProxyPassReverse "/api/students/" "http://172.17.0.3:3000/"
+	
+	ProxyPass "/" "http://172.17.0.2:80/"
+	ProxyPassReverse "/" "http://172.17.0.2:80/"
+</VirtualHost>
+````
+
+Notre container "res/apache_rp" ayant pour rôle d'être un reverse serveur proxy sera donc en charge de nous redirigé
+sur les ressources des containers "res/apache_php" ou "express_dynamic" en fonction de l'url. 
+
+ATTENTION : Ici les adresses des containers à atteindre sont stockées en dur. C'est à dire qu'il faut s'assurer qu'au lancement du reverse proxy
+que ces 2 containeurs aient les mêmes addresses que ci-dessus. C'est donc une solution très fragile !
+
+Lancement des services et du reverse serveur proxy : 
+````
+docker build -t res/apache_php .
+docker build -t res/express_students .
+docker build -t res/apache_rp .
+
+docker run -d  res/express_students
+docker run -p 8080:80 res/apache_rp
+docker run -d  res/apache_php
+````
+
+Accès aux ressources :
+
+Les ressources des containers apache_static et express_dynamic ne sont donc pas accessible directement. (Pas de port mapping sur ces containers).
+Il est nécessaire de passer par le reverse proxy. (Port mapping sur 8080)
+
+cmd :
+
+````
+telnet localhost 8080
+GET / HTTP/1.0[\r\n] // ou GET /api/students/ HTTP/1.0[\r\n]
+Host: demo.res.ch
+````
+
+navigateur :
+
+Si on tente de se connecter sur localhost:8080 -> redirection sur le site par defaut
+
+C'est parce que le navigateur doit envoyer l'en-tête "host". Pour ce faire, il faut modifier le fichier hosts de windows en ajoutant l'instruction suivante :
+
+````
+127.0.0.1       demo.res.ch
+````
+Ainsi on sera redirigé sur l'addresse du localhost lorsqu'on tentera d'atteindre demo.res.ch (résolution dns)
+
+urls accessibles :
+````
+http://demo.res.ch:8080/
+http://demo.res.ch:8080/api/students/
+````
 
 
 
