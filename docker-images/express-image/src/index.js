@@ -5,37 +5,25 @@ var express = require('express');
 var app = express();
 
 app.get('/', function(req,res) {
-	res.send( generateStudents() );
+	res.send( generateProfessions() );
 });
 
 app.listen(3000, function () {
 	console.log('Accepting HTTP requets on port 3000');
 });
 
-function generateStudents() {
-	var numberOfStudents = chance.integer({
+function generateProfessions() {
+	var numberOfProfessions = chance.integer({
 		min: 0,
 		max: 10
 	});
-	console.log(numberOfStudents);
-	var students = [];
-	for (var i = 0; i< numberOfStudents; i++){
-		var gender = chance.gender();
-		var birthday = chance.year({
-			min: 1990,
-			max: 2000
-		});
-		students.push({
-			firstName : chance.first({
-				gender: gender
-			}),
-			lastName: chance.last(),
-			gender: gender,
-			birthday: chance.birthday({
-				year : birthday
-			})
+	console.log(numberOfProfessions);
+	var professions = [];
+	for (var i = 0; i< numberOfProfessions; i++){
+		professions.push({
+			profession : chance.profession()
 		});
 	};
-	console.log(students);
-	return students;
+	console.log(professions);
+	return professions;
 }
