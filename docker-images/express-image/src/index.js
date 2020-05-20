@@ -14,7 +14,7 @@ app.listen(3000, function () {
 
 function generateProfessions() {
 	var numberOfProfessions = chance.integer({
-		min: 0,
+		min: 1,
 		max: 10
 	});
 	console.log(numberOfProfessions);
