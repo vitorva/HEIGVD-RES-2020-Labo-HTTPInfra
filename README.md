@@ -196,14 +196,17 @@ ATTENTION : Ici les adresses des containers à atteindre sont stockées en dur. 
 que ces 2 containeurs aient les mêmes addresses que ci-dessus. C'est donc une solution très fragile !
 
 Lancement des services et du reverse serveur proxy : 
+Chaque instruction à executer dans le bon répertoire
 ````
 docker build -t res/apache_php .
 docker build -t res/express_students .
 docker build -t res/apache_rp .
-
+````
+Dans cet ordre :
+````
+docker run -d  res/apache_php
 docker run -d  res/express_students
 docker run -p 8080:80 res/apache_rp
-docker run -d  res/apache_php
 ````
 
 Accès aux ressources :
@@ -236,5 +239,60 @@ http://demo.res.ch:8080/
 http://demo.res.ch:8080/api/students/
 ````
 
+## Étape 4 (fb-ajax-jquery)
 
 
+Dans les dockerfiles des 3 images, ajouter les instructions suivantes pour installer vi :
+
+````
+apt-get update // mettre à jour la liste des packetage
+ap-get install -y vim // installer vim
+````
+Pour tester :
+````
+docker run -it res/apache_php /bin/bash
+touch toto
+vi toto
+````
+
+#### Implémenter une requete ajax avec jquery (library javascript)
+
+professions.js (docker-images/apache-php-image/src/js) :
+
+Le but du code suivant est de périodiquement  récupérer et mettre à jour la page 
+avec les données reçues au travers de requêtes AJAX.
+````
+$(function() {
+	console.log("loading professions");
+	
+	function loadProfessions() {
+		$.getJSON("/api/professions/", function (professions) {
+			console.log(professions);
+			message = "My job : " + professions[0].profession;
+			$(".skills").text(message);
+		});
+	};
+	loadProfessions();
+	setInterval(loadProfessions, 2000);
+});
+````
+
+index.html (docker-images/apache-php-image/src) :
+
+Ajouter :
+````
+<! -- Custom script to load students -->
+<script src="js/students.js></script>
+````
+
+Test :
+
+Lancer les 3 containers :
+
+ATTENTION : Ne pas oublier avant de faire un npm install puis reconstruire l'image express_students (Car il manque le dossier nodes_modules).
+````
+docker run -d --name apache_static res/apache_php
+docker run -d --name express_dynamic res/express_students
+docker run -d -p 8080:80 --name apache_rp res/apache_rp
+````
+Et se connecter sur le reverse proxy : demo.res.ch:8080/
