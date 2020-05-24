@@ -296,3 +296,85 @@ docker run -d --name express_dynamic res/express_students
 docker run -d -p 8080:80 --name apache_rp res/apache_rp
 ````
 Et se connecter sur le reverse proxy : demo.res.ch:8080/
+
+## Étape 5 (fb-dynamic-configuration)
+
+On va modifier l'implémentation des adresses ip hard-codé pour la rendre dynamique.
+L'objectif est de pouvoir fournir ces informations aux travers de variables d'environnements (grâce au flag -e) lors de la création du docker apache_rp.
+
+#### Configuration dynamique du reverse proxy
+
+Les valeurs qui seront saisies, seront utilisées dans notre fichier de configuration.
+Afin de générer ce fichier on va utiliser php comme un moteur de template.
+
+Pour ce faire, on va devoir lancer un script lors du lancement d'un container.
+
+apache2-foreground est un fichier appelé lors de la création de notre image php (7.2)
+On va donc l'overwrite pour faire executer notre script.
+
+Création de se fichier en se basant sur l'existant : https://github.com/docker-library/php/tree/master/7.2
+
+Il est nécessaire d'appliquer l'instruction suivante pour rendre ce fichier exéctuable.
+````
+chmod 755 apache2-foreground 
+````
+
+Dans le Dockerfile, ajouter : 
+````
+COPY apache2-foreground /usr/local/bin/
+````
+
+Après reconstruction de cette image et lancement d'un container j'avais le problème suivant :
+
+Cela était du à un problème de format à cause de caractères de fin de ligne Windows (^M) .
+Cette erreur a été résolu en convertissant ce fichier en format UNIX LF à l'aide de notepad ++
+
+
+Création du fichier config-template.php dans le dossier "templates" :
+````
+<?php
+$dynamic_app = getenv('DYNAMIC_APP');
+$static_app = getenv('STATIC_APP');
+?>
+
+<VirtualHost *:80>
+	ServerName demo.res.ch
+	
+	ProxyPass '/api/professions/' 'http://<?php print "$dynamic_app"?>/'
+	ProxyPassReverse '/api/professions/' 'http://<?php print "$dynamic_app"?>/'
+	
+	ProxyPass '/' 'http://<?php print "$static_app"?>/'
+	ProxyPassReverse '/' 'http://<?php print "$static_app"?>/'
+</VirtualHost>
+````
+Le but de ce fichier est de récupérer les variables d'environnements afin de configurer dynamiquement les adresses ip des containers à atteindre
+par le reverse proxy.
+
+Dans le Dockerfile, ajouter :
+````
+COPY templates /var/apache2/templates
+````
+
+Vérifier que la copie a bien eu lieu : 
+````
+docker run -it res/apache_rp /bin/bash
+cd /var/apache2/templates
+ls
+exit
+````
+
+Dans le fichier apache2-forground, écrire notre script :
+````
+echo "Dynamic app URL: $DYNAMIC_APP"
+php /var/apache2/templates/config-template.php > /etc/apache2/sites-available/001-reverse-proxy.conf
+````
+Ce script aura pour effet remplacer le contenu du fichier "001-reverse-proxy.conf" par celui de notre fichier "config-templates.php".
+
+
+Vérification :
+
+Lancemement de plusieurs containers (apache_php, express_students)
+Exécuter l'instruction suivante :
+````
+docker run -d -e STATIC_APP=172.17.0.X:80 -e DYNAMIC_APP=172.17.0.Y:3000 -p 8080:80 res/apache_rp
+````
