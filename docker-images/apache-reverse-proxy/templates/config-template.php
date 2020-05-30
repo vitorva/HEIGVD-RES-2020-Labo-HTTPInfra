@@ -15,16 +15,22 @@ $dynamic_app2 = getenv('DYNAMIC_APP2');
 	ProxyPass /balancer-manager !
 	
 	<Proxy "balancer://mycluster2">
-    BalancerMember 'http://<?php print "$dynamic_app1"?>'
-	BalancerMember 'http://<?php print "$dynamic_app2"?>'
+    BalancerMember 'http://<?php print "$dynamic_app1"?>' 
+	BalancerMember 'http://<?php print "$dynamic_app2"?>' 
+	
+	ProxySet lbmethod=byrequests
 	</Proxy>
 	
 	ProxyPass        "/api/professions/" "balancer://mycluster2"
 	ProxyPassReverse "/api/professions/" "balancer://mycluster2"
+
 	
+	Header add Set-Cookie "ROUTEID=.%{BALANCER_WORKER_ROUTE}e; path=/" env=BALANCER_ROUTE_CHANGED
 	<Proxy "balancer://mycluster1/">
-    BalancerMember 'http://<?php print "$static_app1"?>/'
-	BalancerMember 'http://<?php print "$static_app2"?>/'
+    BalancerMember 'http://<?php print "$static_app1"?>/' route=1
+	BalancerMember 'http://<?php print "$static_app2"?>/' route=2
+	
+	ProxySet stickysession=ROUTEID
 	</Proxy>
 	
 	ProxyPass        "/" "balancer://mycluster1/"
