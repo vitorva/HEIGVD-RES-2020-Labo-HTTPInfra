@@ -13,15 +13,21 @@ app.listen(3000, function () {
 });
 
 function generateProfessions() {
+	var ip = require('ip');
+	console.log(ip.address()); // my ip address
+	
 	var numberOfProfessions = chance.integer({
 		min: 1,
-		max: 10
+		max: 5
 	});
+	
 	console.log(numberOfProfessions);
+	
 	var professions = [];
 	for (var i = 0; i< numberOfProfessions; i++){
 		professions.push({
-			profession : chance.profession()
+			profession : chance.profession(),
+			ip : ip.address()
 		});
 	};
 	console.log(professions);
